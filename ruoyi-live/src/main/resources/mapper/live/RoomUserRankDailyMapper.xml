@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.live.mapper.RoomUserRankDailyMapper">
+
+    <insert id="upsert">
+        insert into room_user_rank_daily
+            (room_id, user_id, stat_date, watch_time, captured_time)
+        values
+            (#{roomId}, #{userId}, #{statDate, jdbcType=DATE}, #{watchTime}, #{capturedTime})
+            on duplicate key update
+                                 watch_time = values(watch_time),
+                                 captured_time = values(captured_time)
+    </insert>
+
+</mapper>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.live.mapper.RoomUserRoomMapper">
+
+    <select id="selectByRoomKey" resultType="com.ruoyi.live.domain.RoomUserRoom">
+        select
+            id,
+            room_key as roomKey,
+            shop_name as shopName,
+            last_seen_time as lastSeenTime
+        from room_user_room
+        where room_key = #{roomKey}
+            limit 1
+    </select>
+
+    <insert id="upsert">
+        insert into room_user_room (room_key, shop_name, last_seen_time)
+        values (#{roomKey}, #{shopName}, #{lastSeenTime})
+            on duplicate key update
+                                 shop_name = values(shop_name),
+                                 last_seen_time = values(last_seen_time)
+    </insert>
+
+</mapper>

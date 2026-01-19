@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ruoyi.live.mapper.LiveUserMapper">
+
+    <select id="selectByRoomIdAndUsername" resultType="com.ruoyi.live.domain.LiveUser">
+        SELECT id,
+               room_id AS roomId,
+               username,
+               status,
+               create_time AS createTime
+        FROM live_user
+        WHERE room_id = #{roomId}
+          AND username = #{username}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.ruoyi.live.domain.LiveUser" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO live_user (room_id, username, status, create_time)
+        VALUES (#{roomId}, #{username}, #{status}, #{createTime})
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE live_user
+        SET status = #{status}
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectUserPage" resultType="com.ruoyi.live.mapper.vo.LiveUserPageResp">
+        SELECT
+        id,
+        room_id AS roomId,
+        username,
+        status,
+        create_time AS createTime
+        FROM live_user
+        <where>
+            room_id = #{req.roomId}
+
+            <if test="req.username != null and req.username != ''">
+                AND username LIKE CONCAT('%', #{req.username}, '%')
+            </if>
+
+            <if test="req.status != null">
+                AND status = #{req.status}
+            </if>
+
+            <if test="req.beginTime != null">
+                AND create_time &gt;= #{req.beginTime}
+            </if>
+
+            <if test="req.endTime != null">
+                AND create_time &lt;= #{req.endTime}
+            </if>
+        </where>
+        ORDER BY create_time DESC, id DESC
+    </select>
+
+    <!-- 导出A：直播间列表页导出（每一行=一个用户）
+         字段：直播间名称 / 用户名 / 用户状态 / 用户首次出现时间 -->
+    <select id="selectExportRoomUsers" resultType="com.ruoyi.live.excel.LiveRoomUserExportResp">
+        SELECT
+            r.name AS roomName,
+            u.username AS username,
+            u.status AS status,
+            u.create_time AS userCreateTime
+        FROM live_user u
+        JOIN live_room r ON r.id = u.room_id
+        WHERE u.room_id IN
+        <foreach collection="roomIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        ORDER BY r.id DESC, u.id DESC
+    </select>
+
+    <!-- 导出B：用户列表页导出（每一行=一条评论）
+         字段：直播间名称 / 用户名 / 评论内容 / 评论时间 -->
+    <select id="selectExportRoomUserComments" resultType="com.ruoyi.live.excel.LiveUserCommentExportResp">
+        SELECT
+            r.name AS roomName,
+            u.username AS username,
+            c.content AS content,
+            c.create_time AS commentTime
+        FROM live_comment c
+        JOIN live_user u ON u.id = c.user_id
+        JOIN live_room r ON r.id = c.room_id
+        WHERE c.room_id = #{req.roomId}
+          <if test="req.username != null and req.username != ''">
+              AND u.username LIKE CONCAT('%', #{req.username}, '%')
+          </if>
+          <if test="req.status != null">
+              AND u.status = #{req.status}
+          </if>
+          <if test="req.beginTime != null">
+              AND u.create_time &gt;= #{req.beginTime}
+          </if>
+          <if test="req.endTime != null">
+              AND u.create_time &lt;= #{req.endTime}
+          </if>
+        ORDER BY c.id DESC
+    </select>
+
+</mapper>

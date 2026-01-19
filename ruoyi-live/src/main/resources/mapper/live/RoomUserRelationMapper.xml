@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.live.mapper.RoomUserRelationMapper">
+
+    <insert id="upsert">
+        insert into room_user_relation
+            (room_id, user_id, is_follower, is_following, last_watch_time)
+        values
+            (#{roomId}, #{userId}, #{isFollower}, #{isFollowing}, #{lastWatchTime})
+            on duplicate key update
+                                 is_follower = values(is_follower),
+                                 is_following = values(is_following),
+                                 last_watch_time = values(last_watch_time)
+    </insert>
+
+</mapper>

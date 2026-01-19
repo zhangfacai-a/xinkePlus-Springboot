@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ruoyi.live.mapper.LiveRoomMapper">
+
+    <select id="selectByName" resultType="com.ruoyi.live.domain.LiveRoom">
+        SELECT id, name, create_time AS createTime
+        FROM live_room
+        WHERE name = #{name}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.ruoyi.live.domain.LiveRoom" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO live_room (name, create_time)
+        VALUES (#{name}, #{createTime})
+    </insert>
+    <select id="selectRoomPage" resultType="com.ruoyi.live.mapper.vo.LiveRoomPageResp">
+        SELECT
+        r.id,
+        r.name,
+        r.create_time AS createTime,
+
+        IFNULL(u.userCount, 0)     AS userCount,
+        IFNULL(u.status0Count, 0)  AS status0Count,
+        IFNULL(u.status1Count, 0)  AS status1Count,
+        IFNULL(u.status2Count, 0)  AS status2Count,
+        IFNULL(u.status3Count, 0)  AS status3Count,
+
+        c.lastActiveTime AS lastActiveTime
+
+        FROM live_room r
+
+        LEFT JOIN (
+        SELECT
+        room_id,
+        COUNT(*) AS userCount,
+        SUM(status = 0) AS status0Count,
+        SUM(status = 1) AS status1Count,
+        SUM(status = 2) AS status2Count,
+        SUM(status = 3) AS status3Count
+        FROM live_user
+        <where>
+            <if test="beginTime != null">
+                AND create_time &gt;= #{beginTime}
+            </if>
+            <if test="endTime != null">
+                AND create_time &lt;= #{endTime}
+            </if>
+        </where>
+        GROUP BY room_id
+        ) u ON u.room_id = r.id
+
+        LEFT JOIN (
+        SELECT
+        room_id,
+        MAX(create_time) AS lastActiveTime
+        FROM live_comment
+        <where>
+            <if test="beginTime != null">
+                AND create_time &gt;= #{beginTime}
+            </if>
+            <if test="endTime != null">
+                AND create_time &lt;= #{endTime}
+            </if>
+        </where>
+        GROUP BY room_id
+        ) c ON c.room_id = r.id
+
+        <where>
+            <if test="name != null and name != ''">
+                AND r.name LIKE CONCAT('%', #{name}, '%')
+            </if>
+        </where>
+
+        ORDER BY userCount DESC
+    </select>
+
+    <select id="selectRoomIdsByFilter" resultType="java.lang.Long">
+        SELECT r.id
+        FROM live_room r
+        WHERE 1=1
+          <if test="req != null and req.name != null and req.name != ''">
+              AND r.name LIKE CONCAT('%', #{req.name}, '%')
+          </if>
+          <if test="req != null and req.beginTime != null">
+              AND r.create_time &gt;= #{req.beginTime}
+          </if>
+          <if test="req != null and req.endTime != null">
+              AND r.create_time &lt;= #{req.endTime}
+          </if>
+        ORDER BY r.id DESC
+    </select>
+
+</mapper>
