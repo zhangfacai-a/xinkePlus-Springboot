@@ -91,8 +91,8 @@ public class RoomUserReportServiceImpl implements IRoomUserReportService {
             RoomUserRelation rel = new RoomUserRelation();
             rel.setRoomId(roomId);
             rel.setUserId(userId);
-            rel.setIsFollower(Boolean.TRUE.equals(item.getIsFollower()) ? 1 : 0);
-            rel.setIsFollowing(Boolean.TRUE.equals(item.getIsFollowing()) ? 1 : 0);
+            rel.setIsFollower(Boolean.TRUE.equals(item.getIsFollower()));
+            rel.setIsFollowing(Boolean.TRUE.equals(item.getIsFollowing()));
             rel.setLastWatchTime(item.getWatchTime() == null ? 0 : item.getWatchTime());
             relationMapper.upsert(rel);
 

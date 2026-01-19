@@ -1,11 +1,15 @@
 package com.ruoyi.live.mapper;
 
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
 import com.ruoyi.live.domain.RoomUserRoom;
+import org.apache.ibatis.annotations.Param;
 
-@Mapper
+import java.util.List;
+
 public interface RoomUserRoomMapper {
-    int upsert(RoomUserRoom room);
+    void upsert(RoomUserRoom room);
+
     RoomUserRoom selectByRoomKey(@Param("roomKey") String roomKey);
+
+    /** 直播间分页列表（分页由 BaseController.startPage() 驱动） */
+    List<RoomUserRoom> selectRoomList(@Param("shopName") String shopName, @Param("roomKey") String roomKey);
 }
