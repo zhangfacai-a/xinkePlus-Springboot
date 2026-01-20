@@ -11,6 +11,18 @@ public class RoomUserAudienceQuery {
     private String ownerName;
     private Integer followStatus;
 
+    /**
+     * 关系更新时间-开始（筛选 room_user_relation.update_time）
+     * 建议前端传：yyyy-MM-dd HH:mm:ss
+     */
+    private String relationUpdateTimeBegin;
+
+    /**
+     * 关系更新时间-结束（筛选 room_user_relation.update_time）
+     * 建议前端传：yyyy-MM-dd HH:mm:ss
+     */
+    private String relationUpdateTimeEnd;
+
     public String getSecUid() { return secUid; }
     public void setSecUid(String secUid) { this.secUid = secUid; }
 
@@ -22,4 +34,10 @@ public class RoomUserAudienceQuery {
 
     public Integer getFollowStatus() { return followStatus; }
     public void setFollowStatus(Integer followStatus) { this.followStatus = followStatus; }
+
+    public String getRelationUpdateTimeBegin() { return relationUpdateTimeBegin; }
+    public void setRelationUpdateTimeBegin(String relationUpdateTimeBegin) { this.relationUpdateTimeBegin = relationUpdateTimeBegin; }
+
+    public String getRelationUpdateTimeEnd() { return relationUpdateTimeEnd; }
+    public void setRelationUpdateTimeEnd(String relationUpdateTimeEnd) { this.relationUpdateTimeEnd = relationUpdateTimeEnd; }
 }

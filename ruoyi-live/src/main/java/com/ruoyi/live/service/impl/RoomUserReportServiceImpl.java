@@ -28,6 +28,9 @@ public class RoomUserReportServiceImpl implements IRoomUserReportService {
 
     private static final SimpleDateFormat READY_DATE_FMT = new SimpleDateFormat("yyyy.MM.dd");
 
+    /** 抖音用户主页固定前缀：上报的 secUid 可能会带这个 */
+    private static final String DOUYIN_USER_PREFIX = "https://www.douyin.com/user/";
+
     public RoomUserReportServiceImpl(RoomUserRoomMapper roomMapper,
                                      RoomUserUserMapper userMapper,
                                      RoomUserRelationMapper relationMapper,
@@ -74,16 +77,24 @@ public class RoomUserReportServiceImpl implements IRoomUserReportService {
                 continue;
             }
 
-            // 3.1 upsert user
+            // ===== 关键改动：统一规范化 secUid（去掉 https://www.douyin.com/user/ 前缀等） =====
+            String secUid = normalizeSecUid(item.getSecUid());
+            if (secUid == null || secUid.isBlank()) {
+                continue;
+            }
+            // 可选：把清洗后的值写回 item，确保后续逻辑不会再用到原始带前缀的值
+            item.setSecUid(secUid);
+
+            // 3.1 upsert user（库里只存纯 secUid）
             RoomUserUser user = new RoomUserUser();
-            user.setSecUid(item.getSecUid());
+            user.setSecUid(secUid);
             user.setNickname(item.getNickname());
             user.setLastSeenTime(now);
             userMapper.upsert(user);
 
-            RoomUserUser dbUser = userMapper.selectBySecUid(item.getSecUid());
+            RoomUserUser dbUser = userMapper.selectBySecUid(secUid);
             if (dbUser == null) {
-                throw new IllegalStateException("user upsert 后未查询到记录: " + item.getSecUid());
+                throw new IllegalStateException("user upsert 后未查询到记录: " + secUid);
             }
             Long userId = dbUser.getId();
 
@@ -107,9 +118,52 @@ public class RoomUserReportServiceImpl implements IRoomUserReportService {
         }
     }
 
+    /**
+     * 将上报的 secUid 统一规范化成“纯 secUid”
+     * 支持输入：
+     * - MS4wLjABAAAAxxx
+     * - https://www.douyin.com/user/MS4wLjABAAAAxxx
+     * - https://www.douyin.com/user/MS4wLjABAAAAxxx?modal_id=...
+     * - https://www.douyin.com/user/MS4wLjABAAAAxxx/
+     */
+    private String normalizeSecUid(String input) {
+        if (input == null) {
+            return null;
+        }
+        String s = input.trim();
+        if (s.isEmpty()) {
+            return s;
+        }
+
+        // 去掉 query 参数
+        int qIndex = s.indexOf('?');
+        if (qIndex >= 0) {
+            s = s.substring(0, qIndex);
+        }
+
+        // 去掉末尾的 /
+        while (s.endsWith("/")) {
+            s = s.substring(0, s.length() - 1);
+        }
+
+        // 去掉固定前缀
+        if (s.startsWith(DOUYIN_USER_PREFIX)) {
+            s = s.substring(DOUYIN_USER_PREFIX.length());
+        }
+
+        // 兜底：如果是其他 http 链接形态，尽量取最后一段
+        if (s.startsWith("http")) {
+            int lastSlash = s.lastIndexOf('/');
+            if (lastSlash >= 0 && lastSlash < s.length() - 1) {
+                s = s.substring(lastSlash + 1);
+            }
+        }
+
+        return s;
+    }
+
     private Date parseReadyDate(String readyDate) {
         if (readyDate == null || readyDate.isBlank()) {
-            // 如果插件没传 ready_date，就用当天（只要你表里 stat_date 是 DATE，也能正常落）
             return new Date();
         }
         try {

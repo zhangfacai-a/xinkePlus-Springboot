@@ -56,7 +56,17 @@
         <if test="q != null and q.followStatus != null">
             AND r.follow_status = #{q.followStatus}
         </if>
-        ORDER BY r.last_watch_time DESC, r.update_time DESC
+
+        <!-- 【新增】按 relationUpdateTime 时间段筛选（r.update_time） -->
+        <if test="q != null and q.relationUpdateTimeBegin != null and q.relationUpdateTimeBegin != ''">
+            AND r.update_time <![CDATA[>=]]> #{q.relationUpdateTimeBegin}
+        </if>
+        <if test="q != null and q.relationUpdateTimeEnd != null and q.relationUpdateTimeEnd != ''">
+            AND r.update_time <![CDATA[<=]]> #{q.relationUpdateTimeEnd}
+        </if>
+
+        <!-- 【修改】默认排序：按 relationUpdateTime 倒序（后添加先显示） -->
+        ORDER BY r.update_time DESC
     </select>
 
     <!-- 【备注】直播间内某个用户详情（user + relation） -->

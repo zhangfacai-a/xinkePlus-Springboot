@@ -1,5 +1,7 @@
 package com.ruoyi.live.domain;
 
+import lombok.Data;
+
 import java.time.LocalDateTime;
 
 /**
@@ -12,6 +14,7 @@ import java.time.LocalDateTime;
  *
  * 关键：采集入库不要覆盖业务字段。
  */
+@Data
 public class RoomUserRelation {
     private Long id;
 
@@ -41,40 +44,4 @@ public class RoomUserRelation {
 
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
-    public Long getRoomId() { return roomId; }
-    public void setRoomId(Long roomId) { this.roomId = roomId; }
-
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
-
-    public String getOwnerName() { return ownerName; }
-    public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
-
-    public Integer getFollowStatus() { return followStatus; }
-    public void setFollowStatus(Integer followStatus) { this.followStatus = followStatus; }
-
-    public String getOrderNo() { return orderNo; }
-    public void setOrderNo(String orderNo) { this.orderNo = orderNo; }
-
-    public String getRemark() { return remark; }
-    public void setRemark(String remark) { this.remark = remark; }
-
-    public Boolean getIsFollower() { return isFollower; }
-    public void setIsFollower(Boolean isFollower) { this.isFollower = isFollower; }
-
-    public Boolean getIsFollowing() { return isFollowing; }
-    public void setIsFollowing(Boolean isFollowing) { this.isFollowing = isFollowing; }
-
-    public Integer getLastWatchTime() { return lastWatchTime; }
-    public void setLastWatchTime(Integer lastWatchTime) { this.lastWatchTime = lastWatchTime; }
-
-    public LocalDateTime getCreateTime() { return createTime; }
-    public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }
-
-    public LocalDateTime getUpdateTime() { return updateTime; }
-    public void setUpdateTime(LocalDateTime updateTime) { this.updateTime = updateTime; }
 }

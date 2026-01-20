@@ -3,13 +3,16 @@ package com.ruoyi.live.controller;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
+import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.live.dto.RoomUserAudienceQuery;
 import com.ruoyi.live.dto.RoomUserBizUpdateReq;
+import com.ruoyi.live.excel.RoomUserAudienceExportResp;
 import com.ruoyi.live.service.IRoomUserManageService;
 import com.ruoyi.live.vo.RoomUserAudienceDetailVO;
 import com.ruoyi.live.vo.RoomUserAudienceVO;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
 /**
@@ -38,6 +41,17 @@ public class RoomUserManageController extends BaseController {
         startPage();
         List<RoomUserAudienceVO> list = manageService.listRoomUsers(roomId, q);
         return getDataTable(list);
+    }
+
+    /**
+     * 导出（按筛选条件导出，不分页）
+     * GET /live/roomUserManage/room/{roomId}/users/export?...筛选参数同列表
+     */
+    @GetMapping("/room/{roomId}/users/export")
+    public void exportRoomUsers(@PathVariable Long roomId, RoomUserAudienceQuery q, HttpServletResponse response) {
+        List<RoomUserAudienceExportResp> list = manageService.exportRoomUsers(roomId, q);
+        ExcelUtil<RoomUserAudienceExportResp> util = new ExcelUtil<>(RoomUserAudienceExportResp.class);
+        util.exportExcel(response, list, "直播间用户");
     }
 
     /**

@@ -3,6 +3,7 @@ package com.ruoyi.live.service.impl;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.live.dto.RoomUserAudienceQuery;
 import com.ruoyi.live.dto.RoomUserBizUpdateReq;
+import com.ruoyi.live.excel.RoomUserAudienceExportResp;
 import com.ruoyi.live.mapper.RoomUserRelationMapper;
 import com.ruoyi.live.service.IRoomUserManageService;
 import com.ruoyi.live.vo.RoomUserAudienceDetailVO;
@@ -10,6 +11,7 @@ import com.ruoyi.live.vo.RoomUserAudienceVO;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -49,5 +51,34 @@ public class RoomUserManageServiceImpl implements IRoomUserManageService {
         if (rows <= 0) {
             throw new ServiceException("更新失败：未找到该直播间用户关系记录");
         }
+    }
+
+    @Override
+    public List<RoomUserAudienceExportResp> exportRoomUsers(Long roomId, RoomUserAudienceQuery q) {
+        // 不分页：直接按筛选条件导出全部
+        List<RoomUserAudienceVO> list = relationMapper.selectAudienceList(roomId, q);
+        if (list == null || list.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<RoomUserAudienceExportResp> out = new ArrayList<>(list.size());
+        for (RoomUserAudienceVO vo : list) {
+            RoomUserAudienceExportResp r = new RoomUserAudienceExportResp();
+            r.setSecUid(vo.getSecUid());
+            r.setNickname(vo.getNickname());
+
+            r.setIsFollowingText(Boolean.TRUE.equals(vo.getIsFollowing()) ? "是" : "否");
+            r.setIsFollowerText(Boolean.TRUE.equals(vo.getIsFollower()) ? "是" : "否");
+
+            r.setLastWatchTime(vo.getLastWatchTime());
+            r.setOwnerName(vo.getOwnerName());
+            r.setFollowStatus(vo.getFollowStatus());
+            r.setOrderNo(vo.getOrderNo());
+            r.setRemark(vo.getRemark());
+            r.setRelationUpdateTime(vo.getRelationUpdateTime());
+
+            out.add(r);
+        }
+        return out;
     }
 }
