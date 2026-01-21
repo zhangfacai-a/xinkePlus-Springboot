@@ -28,7 +28,7 @@ public class RoomUserReportServiceImpl implements IRoomUserReportService {
 
     private static final SimpleDateFormat READY_DATE_FMT = new SimpleDateFormat("yyyy.MM.dd");
 
-    /** 抖音用户主页固定前缀：上报的 secUid 可能会带这个 */
+    /** 抖音用户主页固定前缀：数据库中 secUid 统一存为这个 URL + 纯 secUid */
     private static final String DOUYIN_USER_PREFIX = "https://www.douyin.com/user/";
 
     public RoomUserReportServiceImpl(RoomUserRoomMapper roomMapper,
@@ -77,24 +77,26 @@ public class RoomUserReportServiceImpl implements IRoomUserReportService {
                 continue;
             }
 
-            // ===== 关键改动：统一规范化 secUid（去掉 https://www.douyin.com/user/ 前缀等） =====
-            String secUid = normalizeSecUid(item.getSecUid());
-            if (secUid == null || secUid.isBlank()) {
+            // 3.0 统一 secUid：先提取纯 secUid，再拼成数据库存储用的完整 URL
+            String secUidPure = normalizeSecUid(item.getSecUid());
+            if (secUidPure == null || secUidPure.isBlank()) {
                 continue;
             }
-            // 可选：把清洗后的值写回 item，确保后续逻辑不会再用到原始带前缀的值
-            item.setSecUid(secUid);
+            String secUidDb = DOUYIN_USER_PREFIX + secUidPure;
 
-            // 3.1 upsert user（库里只存纯 secUid）
+            // 可选：写回 item，保证后续链路看到的是“完整 URL”
+            item.setSecUid(secUidDb);
+
+            // 3.1 upsert user（库里统一存完整 URL）
             RoomUserUser user = new RoomUserUser();
-            user.setSecUid(secUid);
+            user.setSecUid(secUidDb);
             user.setNickname(item.getNickname());
             user.setLastSeenTime(now);
             userMapper.upsert(user);
 
-            RoomUserUser dbUser = userMapper.selectBySecUid(secUid);
+            RoomUserUser dbUser = userMapper.selectBySecUid(secUidDb);
             if (dbUser == null) {
-                throw new IllegalStateException("user upsert 后未查询到记录: " + secUid);
+                throw new IllegalStateException("user upsert 后未查询到记录: " + secUidDb);
             }
             Long userId = dbUser.getId();
 
@@ -119,7 +121,7 @@ public class RoomUserReportServiceImpl implements IRoomUserReportService {
     }
 
     /**
-     * 将上报的 secUid 统一规范化成“纯 secUid”
+     * 将上报的 secUid 统一规范化成“纯 secUid”（不带前缀、不带参数、不带末尾 /）
      * 支持输入：
      * - MS4wLjABAAAAxxx
      * - https://www.douyin.com/user/MS4wLjABAAAAxxx
@@ -146,12 +148,12 @@ public class RoomUserReportServiceImpl implements IRoomUserReportService {
             s = s.substring(0, s.length() - 1);
         }
 
-        // 去掉固定前缀
+        // 如果是固定前缀 URL，截取后半段
         if (s.startsWith(DOUYIN_USER_PREFIX)) {
             s = s.substring(DOUYIN_USER_PREFIX.length());
         }
 
-        // 兜底：如果是其他 http 链接形态，尽量取最后一段
+        // 兜底：其他 http 链接形态，尽量取最后一段
         if (s.startsWith("http")) {
             int lastSlash = s.lastIndexOf('/');
             if (lastSlash >= 0 && lastSlash < s.length() - 1) {

@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
  * 直播间用户导出 VO（系统用）
  *
  * 【备注】
- * - 用于 ExcelUtil 导出（优先使用 @Excel 注解）
- * - 字段尽量和列表页一致，但对布尔值做了“是/否”转换，更适合给运营看
+ * - 用于 ExcelUtil 导出
+ * - 状态码通过 readConverterExp 转为中文
  */
 @Data
 public class RoomUserAudienceExportResp {
@@ -33,7 +33,11 @@ public class RoomUserAudienceExportResp {
     @Excel(name = "负责人")
     private String ownerName;
 
-    @Excel(name = "状态码")
+    /** ✅ 状态码 → 中文 */
+    @Excel(
+            name = "状态",
+            readConverterExp = "0=未跟单,1=跟单中,2=已下单,3=未回复"
+    )
     private Integer followStatus;
 
     @Excel(name = "订单号")
