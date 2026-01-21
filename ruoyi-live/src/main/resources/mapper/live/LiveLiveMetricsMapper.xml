@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.live.mapper.LiveLiveMetricsMapper">
+
+    <select id="selectRoomIdByKey" resultType="java.lang.Long">
+        select id from live_live_room where room_key = #{roomKey} limit 1
+    </select>
+
+    <insert id="insertRoom">
+        insert into live_live_room(room_key, room_name)
+        values(#{roomKey}, #{roomName})
+    </insert>
+
+    <update id="updateRoomName">
+        update live_live_room set room_name = #{roomName} where id = #{roomId}
+    </update>
+
+    <select id="selectOwnerIdByName" resultType="java.lang.Long">
+        select id from live_live_owner where owner_name = #{ownerName} limit 1
+    </select>
+
+    <insert id="insertOwner">
+        insert into live_live_owner(owner_name) values(#{ownerName})
+    </insert>
+
+    <select id="selectSessionIdByPlatformSessionRoomId" resultType="java.lang.Long">
+        select id from live_live_session where platform_session_room_id = #{platformSessionRoomId} limit 1
+    </select>
+
+    <select id="selectSessionStartTime" resultType="java.util.Date">
+        select start_time from live_live_session where id = #{sessionId} limit 1
+    </select>
+
+    <insert id="insertSession">
+        insert into live_live_session(room_id, platform_session_room_id, start_time)
+        values(#{roomId}, #{platformSessionRoomId}, #{startTime})
+    </insert>
+
+    <select id="selectLastReportTimeBySession" resultType="java.util.Date">
+        select report_time
+        from live_live_owner_report
+        where session_id = #{sessionId}
+        order by report_time desc
+            limit 1
+    </select>
+
+    <insert id="insertReport">
+        insert into live_live_owner_report(
+            session_id, owner_id,
+            report_time, last_report_time, diff_minutes,
+            gmv_amount, deal_item_cnt, refund_amount,
+            exposure_cnt, viewer_cnt, new_fans_cnt, deal_user_cnt,
+            qianchuan_cost,
+            exposure_watch_rate, watch_follow_rate, conversion_rate
+        ) values (
+                     #{sessionId}, #{ownerId},
+                     #{reportTime}, #{lastReportTime}, #{diffMinutes},
+                     #{gmvAmount}, #{dealItemCnt}, #{refundAmount},
+                     #{exposureCnt}, #{viewerCnt}, #{newFansCnt}, #{dealUserCnt},
+                     #{qianchuanCost},
+                     #{exposureWatchRate}, #{watchFollowRate}, #{conversionRate}
+                 )
+    </insert>
+
+</mapper>

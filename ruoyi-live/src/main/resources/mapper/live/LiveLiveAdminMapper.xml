@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.live.mapper.LiveLiveAdminMapper">
+
+    <!-- report_time 时间范围筛选（用于快照子查询） -->
+    <sql id="reportTimeRange">
+        <if test="beginTime != null and beginTime != ''">
+            and r.report_time <![CDATA[>=]]> #{beginTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and r.report_time <![CDATA[<=]]> #{endTime}
+        </if>
+    </sql>
+
+    <!-- 在筛选范围内取每个(session_id, owner_id)最后一次快照 -->
+    <sql id="latestSnapshotInRange">
+        select r.*
+        from live_live_owner_report r
+        join (
+        select session_id, owner_id, max(report_time) as max_time
+        from live_live_owner_report r
+        where 1=1
+        <include refid="reportTimeRange"/>
+        group by session_id, owner_id
+        ) t
+        on r.session_id = t.session_id
+        and r.owner_id = t.owner_id
+        and r.report_time = t.max_time
+    </sql>
+
+    <!-- ============ 直播间维度：列表 SQL（抽成 sql 片段） ============ -->
+    <sql id="roomPageSql">
+        select
+        rm.id as roomId,
+        rm.room_name as roomName,
+        count(distinct s.id) as sessionCount,
+        count(distinct snap.owner_id) as ownerCount,
+        max(snap.report_time) as lastReportTime,
+
+        ifnull(sum(snap.gmv_amount),0) as gmvAmountTotal,
+        ifnull(sum(snap.deal_item_cnt),0) as dealItemCntTotal,
+        ifnull(sum(snap.refund_amount),0) as refundAmountTotal,
+        ifnull(sum(snap.exposure_cnt),0) as exposureCntTotal,
+        ifnull(sum(snap.viewer_cnt),0) as viewerCntTotal,
+        ifnull(sum(snap.new_fans_cnt),0) as newFansCntTotal,
+        ifnull(sum(snap.deal_user_cnt),0) as dealUserCntTotal,
+        ifnull(sum(snap.qianchuan_cost),0) as qianchuanCostTotal
+        from live_live_room rm
+        left join live_live_session s on s.room_id = rm.id
+        left join (
+        <include refid="latestSnapshotInRange"/>
+        ) snap on snap.session_id = s.id
+        left join live_live_owner o on o.id = snap.owner_id
+        where 1=1
+        <if test="roomName != null and roomName != ''">
+            and rm.room_name like concat('%', #{roomName}, '%')
+        </if>
+        <if test="ownerName != null and ownerName != ''">
+            and o.owner_name like concat('%', #{ownerName}, '%')
+        </if>
+        group by rm.id, rm.room_name
+        order by lastReportTime desc
+    </sql>
+
+    <!-- ============ 直播间维度：列表（分页） ============ -->
+    <select id="selectRoomPage" resultType="com.ruoyi.live.vo.LiveLiveRoomPageResp">
+        <include refid="roomPageSql"/>
+    </select>
+
+    <!-- ============ 直播间维度：导出（全量） ============ -->
+    <select id="selectRoomExport" resultType="com.ruoyi.live.vo.LiveLiveRoomPageResp">
+        <include refid="roomPageSql"/>
+    </select>
+
+    <!-- ============ 直播间维度：某直播间的场次列表 ============ -->
+    <select id="selectRoomSessionPage" resultType="com.ruoyi.live.vo.LiveLiveRoomSessionPageResp">
+        select
+        s.id as sessionId,
+        s.platform_session_room_id as platformSessionRoomId,
+        s.start_time as startTime,
+        count(distinct snap.owner_id) as ownerCount,
+        max(snap.report_time) as lastReportTime,
+
+        ifnull(sum(snap.gmv_amount),0) as gmvAmountTotal,
+        ifnull(sum(snap.deal_item_cnt),0) as dealItemCntTotal,
+        ifnull(sum(snap.refund_amount),0) as refundAmountTotal,
+        ifnull(sum(snap.exposure_cnt),0) as exposureCntTotal,
+        ifnull(sum(snap.viewer_cnt),0) as viewerCntTotal,
+        ifnull(sum(snap.new_fans_cnt),0) as newFansCntTotal,
+        ifnull(sum(snap.deal_user_cnt),0) as dealUserCntTotal,
+        ifnull(sum(snap.qianchuan_cost),0) as qianchuanCostTotal
+        from live_live_session s
+        left join (
+        <include refid="latestSnapshotInRange"/>
+        ) snap on snap.session_id = s.id
+        where 1=1
+        and s.room_id = #{roomId}
+        group by s.id, s.platform_session_room_id, s.start_time
+        order by s.start_time desc
+    </select>
+
+    <!-- ============ 直播间维度：某场次的上报明细（分页） ============ -->
+    <select id="selectSessionReportPage" resultType="com.ruoyi.live.vo.LiveLiveSessionReportPageResp">
+        select
+        r.id as reportId,
+        o.owner_name as ownerName,
+        r.report_time as reportTime,
+        r.last_report_time as lastReportTime,
+        r.diff_minutes as diffMinutes,
+
+        r.gmv_amount as gmvAmount,
+        r.deal_item_cnt as dealItemCnt,
+        r.refund_amount as refundAmount,
+        r.exposure_cnt as exposureCnt,
+        r.viewer_cnt as viewerCnt,
+        r.new_fans_cnt as newFansCnt,
+        r.deal_user_cnt as dealUserCnt,
+        r.qianchuan_cost as qianchuanCost,
+
+        r.exposure_watch_rate as exposureWatchRate,
+        r.watch_follow_rate as watchFollowRate,
+        r.conversion_rate as conversionRate
+        from live_live_owner_report r
+        join live_live_owner o on o.id = r.owner_id
+        where 1=1
+        and r.session_id = #{sessionId}
+        <if test="ownerName != null and ownerName != ''">
+            and o.owner_name like concat('%', #{ownerName}, '%')
+        </if>
+        <if test="beginTime != null and beginTime != ''">
+            and r.report_time <![CDATA[>=]]> #{beginTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and r.report_time <![CDATA[<=]]> #{endTime}
+        </if>
+        order by r.report_time desc
+    </select>
+
+    <!-- ============ 负责人维度：列表 SQL（抽成 sql 片段） ============ -->
+    <sql id="ownerPageSql">
+        select
+        o.id as ownerId,
+        o.owner_name as ownerName,
+        count(distinct rm.id) as roomCount,
+        count(distinct s.id) as sessionCount,
+        max(snap.report_time) as lastReportTime,
+
+        ifnull(sum(snap.gmv_amount),0) as gmvAmountTotal,
+        ifnull(sum(snap.deal_item_cnt),0) as dealItemCntTotal,
+        ifnull(sum(snap.refund_amount),0) as refundAmountTotal,
+        ifnull(sum(snap.exposure_cnt),0) as exposureCntTotal,
+        ifnull(sum(snap.viewer_cnt),0) as viewerCntTotal,
+        ifnull(sum(snap.new_fans_cnt),0) as newFansCntTotal,
+        ifnull(sum(snap.deal_user_cnt),0) as dealUserCntTotal,
+        ifnull(sum(snap.qianchuan_cost),0) as qianchuanCostTotal
+        from live_live_owner o
+        left join (
+        <include refid="latestSnapshotInRange"/>
+        ) snap on snap.owner_id = o.id
+        left join live_live_session s on s.id = snap.session_id
+        left join live_live_room rm on rm.id = s.room_id
+        where 1=1
+        <if test="ownerName != null and ownerName != ''">
+            and o.owner_name like concat('%', #{ownerName}, '%')
+        </if>
+        group by o.id, o.owner_name
+        order by lastReportTime desc
+    </sql>
+
+    <!-- ============ 负责人维度：列表（分页） ============ -->
+    <select id="selectOwnerPage" resultType="com.ruoyi.live.vo.LiveLiveOwnerPageResp">
+        <include refid="ownerPageSql"/>
+    </select>
+
+    <!-- ============ 负责人维度：导出（全量） ============ -->
+    <select id="selectOwnerExport" resultType="com.ruoyi.live.vo.LiveLiveOwnerPageResp">
+        <include refid="ownerPageSql"/>
+    </select>
+
+    <!-- ============ 负责人维度：该负责人参与的直播间列表 ============ -->
+    <select id="selectOwnerRoomPage" resultType="com.ruoyi.live.vo.LiveLiveOwnerRoomPageResp">
+        select
+        rm.id as roomId,
+        rm.room_name as roomName,
+        count(distinct s.id) as sessionCount,
+        max(snap.report_time) as lastReportTime,
+
+        ifnull(sum(snap.gmv_amount),0) as gmvAmountTotal,
+        ifnull(sum(snap.deal_item_cnt),0) as dealItemCntTotal,
+        ifnull(sum(snap.refund_amount),0) as refundAmountTotal,
+        ifnull(sum(snap.exposure_cnt),0) as exposureCntTotal,
+        ifnull(sum(snap.viewer_cnt),0) as viewerCntTotal,
+        ifnull(sum(snap.new_fans_cnt),0) as newFansCntTotal,
+        ifnull(sum(snap.deal_user_cnt),0) as dealUserCntTotal,
+        ifnull(sum(snap.qianchuan_cost),0) as qianchuanCostTotal
+        from live_live_room rm
+        join live_live_session s on s.room_id = rm.id
+        join (
+        <include refid="latestSnapshotInRange"/>
+        ) snap on snap.session_id = s.id
+        where 1=1
+        and snap.owner_id = #{ownerId}
+        <if test="roomName != null and roomName != ''">
+            and rm.room_name like concat('%', #{roomName}, '%')
+        </if>
+        group by rm.id, rm.room_name
+        order by lastReportTime desc
+    </select>
+
+    <!-- ============ 负责人维度：负责人在某直播间的上报明细（分页） ============ -->
+    <select id="selectOwnerRoomReportPage" resultType="com.ruoyi.live.vo.LiveLiveOwnerRoomReportPageResp">
+        select
+        r.id as reportId,
+        s.platform_session_room_id as platformSessionRoomId,
+        s.start_time as startTime,
+
+        r.report_time as reportTime,
+        r.last_report_time as lastReportTime,
+        r.diff_minutes as diffMinutes,
+
+        r.gmv_amount as gmvAmount,
+        r.deal_item_cnt as dealItemCnt,
+        r.refund_amount as refundAmount,
+        r.exposure_cnt as exposureCnt,
+        r.viewer_cnt as viewerCnt,
+        r.new_fans_cnt as newFansCnt,
+        r.deal_user_cnt as dealUserCnt,
+        r.qianchuan_cost as qianchuanCost,
+
+        r.exposure_watch_rate as exposureWatchRate,
+        r.watch_follow_rate as watchFollowRate,
+        r.conversion_rate as conversionRate
+        from live_live_owner_report r
+        join live_live_session s on s.id = r.session_id
+        where 1=1
+        and r.owner_id = #{ownerId}
+        and s.room_id = #{roomId}
+        <if test="beginTime != null and beginTime != ''">
+            and r.report_time <![CDATA[>=]]> #{beginTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and r.report_time <![CDATA[<=]]> #{endTime}
+        </if>
+        order by r.report_time desc
+    </select>
+
+</mapper>
