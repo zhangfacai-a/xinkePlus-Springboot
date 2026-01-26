@@ -47,4 +47,12 @@ public class LiveLiveOwnerPageResp {
 
     @Excel(name = "千川消耗")
     private BigDecimal qianchuanCostTotal;
+
+    /** 转化率 = 成交人数 / 累计观看人数（delta口径：sum后再算） */
+    @Excel(name = "转化率", scale = 6)
+    private BigDecimal conversionRate;
+
+    /** 曝光点击进入率 = 累计观看人数 / 曝光次数（delta口径：sum后再算） */
+    @Excel(name = "曝光点击进入率", scale = 6)
+    private BigDecimal exposureClickRate;
 }

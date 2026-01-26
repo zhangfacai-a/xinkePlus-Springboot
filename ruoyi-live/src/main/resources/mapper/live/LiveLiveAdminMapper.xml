@@ -4,62 +4,65 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.live.mapper.LiveLiveAdminMapper">
 
-    <!-- report_time 时间范围筛选（用于快照子查询） -->
-    <sql id="reportTimeRange">
+    <!--
+      说明：
+      1) 旧逻辑：latestSnapshotInRange + sum(累计字段)  :contentReference[oaicite:1]{index=1}
+      2) 新逻辑：直接从 v_live_live_owner_report_delta 汇总 delta 字段
+      3) 时间筛选：必须作用于 v.report_time（delta 属于 report_time 的区间结束点）
+    -->
+
+    <!-- report_time 时间范围筛选（用于 delta 视图） -->
+    <sql id="deltaReportTimeRange">
         <if test="beginTime != null and beginTime != ''">
-            and r.report_time <![CDATA[>=]]> #{beginTime}
+            and v.report_time <![CDATA[>=]]> #{beginTime}
         </if>
         <if test="endTime != null and endTime != ''">
-            and r.report_time <![CDATA[<=]]> #{endTime}
+            and v.report_time <![CDATA[<=]]> #{endTime}
         </if>
     </sql>
 
-    <!-- 在筛选范围内取每个(session_id, owner_id)最后一次快照 -->
-    <sql id="latestSnapshotInRange">
-        select r.*
-        from live_live_owner_report r
-        join (
-        select session_id, owner_id, max(report_time) as max_time
-        from live_live_owner_report r
-        where 1=1
-        <include refid="reportTimeRange"/>
-        group by session_id, owner_id
-        ) t
-        on r.session_id = t.session_id
-        and r.owner_id = t.owner_id
-        and r.report_time = t.max_time
-    </sql>
-
-    <!-- ============ 直播间维度：列表 SQL（抽成 sql 片段） ============ -->
+    <!-- ============ 直播间维度：列表 SQL（delta汇总） ============ -->
     <sql id="roomPageSql">
         select
         rm.id as roomId,
         rm.room_name as roomName,
         count(distinct s.id) as sessionCount,
-        count(distinct snap.owner_id) as ownerCount,
-        max(snap.report_time) as lastReportTime,
+        count(distinct v.owner_id) as ownerCount,
+        max(v.report_time) as lastReportTime,
 
-        ifnull(sum(snap.gmv_amount),0) as gmvAmountTotal,
-        ifnull(sum(snap.deal_item_cnt),0) as dealItemCntTotal,
-        ifnull(sum(snap.refund_amount),0) as refundAmountTotal,
-        ifnull(sum(snap.exposure_cnt),0) as exposureCntTotal,
-        ifnull(sum(snap.viewer_cnt),0) as viewerCntTotal,
-        ifnull(sum(snap.new_fans_cnt),0) as newFansCntTotal,
-        ifnull(sum(snap.deal_user_cnt),0) as dealUserCntTotal,
-        ifnull(sum(snap.qianchuan_cost),0) as qianchuanCostTotal
+        ifnull(sum(v.gmv_amount_delta),0) as gmvAmountTotal,
+        ifnull(sum(v.deal_item_cnt_delta),0) as dealItemCntTotal,
+        ifnull(sum(v.refund_amount_delta),0) as refundAmountTotal,
+        ifnull(sum(v.exposure_cnt_delta),0) as exposureCntTotal,
+        ifnull(sum(v.viewer_cnt_delta),0) as viewerCntTotal,
+        ifnull(sum(v.new_fans_cnt_delta),0) as newFansCntTotal,
+        ifnull(sum(v.deal_user_cnt_delta),0) as dealUserCntTotal,
+        ifnull(sum(v.qianchuan_cost_delta),0) as qianchuanCostTotal,
+
+        case
+        when ifnull(sum(v.viewer_cnt_delta),0) = 0 then 0
+        else round(sum(v.deal_user_cnt_delta) / sum(v.viewer_cnt_delta), 6)
+        end as conversionRate,
+
+        case
+        when ifnull(sum(v.exposure_cnt_delta),0) = 0 then 0
+        else round(sum(v.viewer_cnt_delta) / sum(v.exposure_cnt_delta), 6)
+        end as exposureClickRate
+
         from live_live_room rm
         left join live_live_session s on s.room_id = rm.id
-        left join (
-        <include refid="latestSnapshotInRange"/>
-        ) snap on snap.session_id = s.id
-        left join live_live_owner o on o.id = snap.owner_id
+        left join v_live_live_owner_report_delta v on v.session_id = s.id
+        left join live_live_owner o on o.id = v.owner_id
         where 1=1
+        <include refid="deltaReportTimeRange"/>
+
         <if test="roomName != null and roomName != ''">
             and rm.room_name like concat('%', #{roomName}, '%')
         </if>
         <if test="ownerName != null and ownerName != ''">
             and o.owner_name like concat('%', #{ownerName}, '%')
         </if>
+
         group by rm.id, rm.room_name
         order by lastReportTime desc
     </sql>
@@ -74,97 +77,126 @@
         <include refid="roomPageSql"/>
     </select>
 
-    <!-- ============ 直播间维度：某直播间的场次列表 ============ -->
+    <!-- ============ 直播间维度：某直播间的场次列表（delta汇总） ============ -->
     <select id="selectRoomSessionPage" resultType="com.ruoyi.live.vo.LiveLiveRoomSessionPageResp">
         select
         s.id as sessionId,
         s.platform_session_room_id as platformSessionRoomId,
         s.start_time as startTime,
-        count(distinct snap.owner_id) as ownerCount,
-        max(snap.report_time) as lastReportTime,
+        count(distinct v.owner_id) as ownerCount,
+        max(v.report_time) as lastReportTime,
 
-        ifnull(sum(snap.gmv_amount),0) as gmvAmountTotal,
-        ifnull(sum(snap.deal_item_cnt),0) as dealItemCntTotal,
-        ifnull(sum(snap.refund_amount),0) as refundAmountTotal,
-        ifnull(sum(snap.exposure_cnt),0) as exposureCntTotal,
-        ifnull(sum(snap.viewer_cnt),0) as viewerCntTotal,
-        ifnull(sum(snap.new_fans_cnt),0) as newFansCntTotal,
-        ifnull(sum(snap.deal_user_cnt),0) as dealUserCntTotal,
-        ifnull(sum(snap.qianchuan_cost),0) as qianchuanCostTotal
+        ifnull(sum(v.gmv_amount_delta),0) as gmvAmountTotal,
+        ifnull(sum(v.deal_item_cnt_delta),0) as dealItemCntTotal,
+        ifnull(sum(v.refund_amount_delta),0) as refundAmountTotal,
+        ifnull(sum(v.exposure_cnt_delta),0) as exposureCntTotal,
+        ifnull(sum(v.viewer_cnt_delta),0) as viewerCntTotal,
+        ifnull(sum(v.new_fans_cnt_delta),0) as newFansCntTotal,
+        ifnull(sum(v.deal_user_cnt_delta),0) as dealUserCntTotal,
+        ifnull(sum(v.qianchuan_cost_delta),0) as qianchuanCostTotal
+
         from live_live_session s
-        left join (
-        <include refid="latestSnapshotInRange"/>
-        ) snap on snap.session_id = s.id
+        left join v_live_live_owner_report_delta v on v.session_id = s.id
         where 1=1
         and s.room_id = #{roomId}
+        <include refid="deltaReportTimeRange"/>
+
         group by s.id, s.platform_session_room_id, s.start_time
         order by s.start_time desc
     </select>
 
-    <!-- ============ 直播间维度：某场次的上报明细（分页） ============ -->
+    <!-- ============ 直播间维度：某场次的上报明细（分页，展示“区间增量”） ============ -->
     <select id="selectSessionReportPage" resultType="com.ruoyi.live.vo.LiveLiveSessionReportPageResp">
         select
-        r.id as reportId,
+        v.id as reportId,
         o.owner_name as ownerName,
-        r.report_time as reportTime,
-        r.last_report_time as lastReportTime,
-        r.diff_minutes as diffMinutes,
 
-        r.gmv_amount as gmvAmount,
-        r.deal_item_cnt as dealItemCnt,
-        r.refund_amount as refundAmount,
-        r.exposure_cnt as exposureCnt,
-        r.viewer_cnt as viewerCnt,
-        r.new_fans_cnt as newFansCnt,
-        r.deal_user_cnt as dealUserCnt,
-        r.qianchuan_cost as qianchuanCost,
+        v.report_time as reportTime,
+        v.prev_report_time as lastReportTime,
+        v.diff_minutes as diffMinutes,
 
-        r.exposure_watch_rate as exposureWatchRate,
-        r.watch_follow_rate as watchFollowRate,
-        r.conversion_rate as conversionRate
-        from live_live_owner_report r
-        join live_live_owner o on o.id = r.owner_id
+        v.gmv_amount_delta as gmvAmount,
+        v.deal_item_cnt_delta as dealItemCnt,
+        v.refund_amount_delta as refundAmount,
+        v.exposure_cnt_delta as exposureCnt,
+        v.viewer_cnt_delta as viewerCnt,
+        v.new_fans_cnt_delta as newFansCnt,
+        v.deal_user_cnt_delta as dealUserCnt,
+        v.qianchuan_cost_delta as qianchuanCost,
+
+        /* 明细页两个上报比率如果你仍然想看“上报值”，可以从原表查；
+        这里按你的需求，优先展示 delta 口径的两个比率 */
+        case
+        when ifnull(v.viewer_cnt_delta,0) = 0 then 0
+        else round(v.deal_user_cnt_delta / v.viewer_cnt_delta, 6)
+        end as conversionRate,
+
+        case
+        when ifnull(v.exposure_cnt_delta,0) = 0 then 0
+        else round(v.viewer_cnt_delta / v.exposure_cnt_delta, 6)
+        end as exposureWatchRate,
+
+        /* 这个字段原本是“观看-关注率(上报值)”，delta 口径下没有严格定义；
+        为了不改 VO，这里返回 NULL（前端可不展示/或你后续定义再补） */
+        null as watchFollowRate
+
+        from v_live_live_owner_report_delta v
+        join live_live_owner o on o.id = v.owner_id
         where 1=1
-        and r.session_id = #{sessionId}
+        and v.session_id = #{sessionId}
+
         <if test="ownerName != null and ownerName != ''">
             and o.owner_name like concat('%', #{ownerName}, '%')
         </if>
         <if test="beginTime != null and beginTime != ''">
-            and r.report_time <![CDATA[>=]]> #{beginTime}
+            and v.report_time <![CDATA[>=]]> #{beginTime}
         </if>
         <if test="endTime != null and endTime != ''">
-            and r.report_time <![CDATA[<=]]> #{endTime}
+            and v.report_time <![CDATA[<=]]> #{endTime}
         </if>
-        order by r.report_time desc
+
+        order by v.report_time desc
     </select>
 
-    <!-- ============ 负责人维度：列表 SQL（抽成 sql 片段） ============ -->
+    <!-- ============ 负责人维度：列表 SQL（delta汇总） ============ -->
     <sql id="ownerPageSql">
         select
         o.id as ownerId,
         o.owner_name as ownerName,
         count(distinct rm.id) as roomCount,
         count(distinct s.id) as sessionCount,
-        max(snap.report_time) as lastReportTime,
+        max(v.report_time) as lastReportTime,
 
-        ifnull(sum(snap.gmv_amount),0) as gmvAmountTotal,
-        ifnull(sum(snap.deal_item_cnt),0) as dealItemCntTotal,
-        ifnull(sum(snap.refund_amount),0) as refundAmountTotal,
-        ifnull(sum(snap.exposure_cnt),0) as exposureCntTotal,
-        ifnull(sum(snap.viewer_cnt),0) as viewerCntTotal,
-        ifnull(sum(snap.new_fans_cnt),0) as newFansCntTotal,
-        ifnull(sum(snap.deal_user_cnt),0) as dealUserCntTotal,
-        ifnull(sum(snap.qianchuan_cost),0) as qianchuanCostTotal
+        ifnull(sum(v.gmv_amount_delta),0) as gmvAmountTotal,
+        ifnull(sum(v.deal_item_cnt_delta),0) as dealItemCntTotal,
+        ifnull(sum(v.refund_amount_delta),0) as refundAmountTotal,
+        ifnull(sum(v.exposure_cnt_delta),0) as exposureCntTotal,
+        ifnull(sum(v.viewer_cnt_delta),0) as viewerCntTotal,
+        ifnull(sum(v.new_fans_cnt_delta),0) as newFansCntTotal,
+        ifnull(sum(v.deal_user_cnt_delta),0) as dealUserCntTotal,
+        ifnull(sum(v.qianchuan_cost_delta),0) as qianchuanCostTotal,
+
+        case
+        when ifnull(sum(v.viewer_cnt_delta),0) = 0 then 0
+        else round(sum(v.deal_user_cnt_delta) / sum(v.viewer_cnt_delta), 6)
+        end as conversionRate,
+
+        case
+        when ifnull(sum(v.exposure_cnt_delta),0) = 0 then 0
+        else round(sum(v.viewer_cnt_delta) / sum(v.exposure_cnt_delta), 6)
+        end as exposureClickRate
+
         from live_live_owner o
-        left join (
-        <include refid="latestSnapshotInRange"/>
-        ) snap on snap.owner_id = o.id
-        left join live_live_session s on s.id = snap.session_id
+        left join v_live_live_owner_report_delta v on v.owner_id = o.id
+        left join live_live_session s on s.id = v.session_id
         left join live_live_room rm on rm.id = s.room_id
         where 1=1
+        <include refid="deltaReportTimeRange"/>
+
         <if test="ownerName != null and ownerName != ''">
             and o.owner_name like concat('%', #{ownerName}, '%')
         </if>
+
         group by o.id, o.owner_name
         order by lastReportTime desc
     </sql>
@@ -179,71 +211,85 @@
         <include refid="ownerPageSql"/>
     </select>
 
-    <!-- ============ 负责人维度：该负责人参与的直播间列表 ============ -->
+    <!-- ============ 负责人维度：该负责人参与的直播间列表（delta汇总） ============ -->
     <select id="selectOwnerRoomPage" resultType="com.ruoyi.live.vo.LiveLiveOwnerRoomPageResp">
         select
         rm.id as roomId,
         rm.room_name as roomName,
         count(distinct s.id) as sessionCount,
-        max(snap.report_time) as lastReportTime,
+        max(v.report_time) as lastReportTime,
 
-        ifnull(sum(snap.gmv_amount),0) as gmvAmountTotal,
-        ifnull(sum(snap.deal_item_cnt),0) as dealItemCntTotal,
-        ifnull(sum(snap.refund_amount),0) as refundAmountTotal,
-        ifnull(sum(snap.exposure_cnt),0) as exposureCntTotal,
-        ifnull(sum(snap.viewer_cnt),0) as viewerCntTotal,
-        ifnull(sum(snap.new_fans_cnt),0) as newFansCntTotal,
-        ifnull(sum(snap.deal_user_cnt),0) as dealUserCntTotal,
-        ifnull(sum(snap.qianchuan_cost),0) as qianchuanCostTotal
+        ifnull(sum(v.gmv_amount_delta),0) as gmvAmountTotal,
+        ifnull(sum(v.deal_item_cnt_delta),0) as dealItemCntTotal,
+        ifnull(sum(v.refund_amount_delta),0) as refundAmountTotal,
+        ifnull(sum(v.exposure_cnt_delta),0) as exposureCntTotal,
+        ifnull(sum(v.viewer_cnt_delta),0) as viewerCntTotal,
+        ifnull(sum(v.new_fans_cnt_delta),0) as newFansCntTotal,
+        ifnull(sum(v.deal_user_cnt_delta),0) as dealUserCntTotal,
+        ifnull(sum(v.qianchuan_cost_delta),0) as qianchuanCostTotal
+
         from live_live_room rm
         join live_live_session s on s.room_id = rm.id
-        join (
-        <include refid="latestSnapshotInRange"/>
-        ) snap on snap.session_id = s.id
+        join v_live_live_owner_report_delta v on v.session_id = s.id
         where 1=1
-        and snap.owner_id = #{ownerId}
+        and v.owner_id = #{ownerId}
+        <include refid="deltaReportTimeRange"/>
+
         <if test="roomName != null and roomName != ''">
             and rm.room_name like concat('%', #{roomName}, '%')
         </if>
+
         group by rm.id, rm.room_name
         order by lastReportTime desc
     </select>
 
-    <!-- ============ 负责人维度：负责人在某直播间的上报明细（分页） ============ -->
+    <!-- ============ 负责人维度：负责人在某直播间的上报明细（分页，展示区间增量） ============ -->
     <select id="selectOwnerRoomReportPage" resultType="com.ruoyi.live.vo.LiveLiveOwnerRoomReportPageResp">
         select
-        r.id as reportId,
+        v.id as reportId,
         s.platform_session_room_id as platformSessionRoomId,
         s.start_time as startTime,
 
-        r.report_time as reportTime,
-        r.last_report_time as lastReportTime,
-        r.diff_minutes as diffMinutes,
+        v.report_time as reportTime,
+        v.prev_report_time as lastReportTime,
+        v.diff_minutes as diffMinutes,
 
-        r.gmv_amount as gmvAmount,
-        r.deal_item_cnt as dealItemCnt,
-        r.refund_amount as refundAmount,
-        r.exposure_cnt as exposureCnt,
-        r.viewer_cnt as viewerCnt,
-        r.new_fans_cnt as newFansCnt,
-        r.deal_user_cnt as dealUserCnt,
-        r.qianchuan_cost as qianchuanCost,
+        v.gmv_amount_delta as gmvAmount,
+        v.deal_item_cnt_delta as dealItemCnt,
+        v.refund_amount_delta as refundAmount,
+        v.exposure_cnt_delta as exposureCnt,
+        v.viewer_cnt_delta as viewerCnt,
+        v.new_fans_cnt_delta as newFansCnt,
+        v.deal_user_cnt_delta as dealUserCnt,
+        v.qianchuan_cost_delta as qianchuanCost,
 
-        r.exposure_watch_rate as exposureWatchRate,
-        r.watch_follow_rate as watchFollowRate,
-        r.conversion_rate as conversionRate
-        from live_live_owner_report r
-        join live_live_session s on s.id = r.session_id
+        /* 明细页按 delta 算的两个比率 */
+        case
+        when ifnull(v.viewer_cnt_delta,0) = 0 then 0
+        else round(v.deal_user_cnt_delta / v.viewer_cnt_delta, 6)
+        end as conversionRate,
+
+        case
+        when ifnull(v.exposure_cnt_delta,0) = 0 then 0
+        else round(v.viewer_cnt_delta / v.exposure_cnt_delta, 6)
+        end as exposureWatchRate,
+
+        null as watchFollowRate
+
+        from v_live_live_owner_report_delta v
+        join live_live_session s on s.id = v.session_id
         where 1=1
-        and r.owner_id = #{ownerId}
+        and v.owner_id = #{ownerId}
         and s.room_id = #{roomId}
+
         <if test="beginTime != null and beginTime != ''">
-            and r.report_time <![CDATA[>=]]> #{beginTime}
+            and v.report_time <![CDATA[>=]]> #{beginTime}
         </if>
         <if test="endTime != null and endTime != ''">
-            and r.report_time <![CDATA[<=]]> #{endTime}
+            and v.report_time <![CDATA[<=]]> #{endTime}
         </if>
-        order by r.report_time desc
+
+        order by v.report_time desc
     </select>
 
 </mapper>

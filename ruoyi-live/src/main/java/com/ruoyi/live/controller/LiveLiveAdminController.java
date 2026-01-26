@@ -62,7 +62,7 @@ public class LiveLiveAdminController extends BaseController {
     /** 导出：负责人维度（筛选后全量） */
     @PostMapping("/owner/export")
     public void exportOwner(HttpServletResponse response, @RequestBody(required = false) LiveLiveOwnerPageReq req) {
-        if (req == null) req = new LiveLiveOwnerPageReq();
+        req = new LiveLiveOwnerPageReq(); // 强制清空筛选，导出全量
         List<LiveLiveOwnerPageResp> list = adminService.exportOwners(req);
         ExcelUtil<LiveLiveOwnerPageResp> util = new ExcelUtil<>(LiveLiveOwnerPageResp.class);
         util.exportExcel(response, list, "负责人维度数据");
