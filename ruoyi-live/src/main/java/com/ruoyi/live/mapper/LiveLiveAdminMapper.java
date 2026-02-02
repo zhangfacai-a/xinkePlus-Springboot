@@ -20,4 +20,6 @@ public interface LiveLiveAdminMapper {
     List<LiveLiveOwnerRoomPageResp> selectOwnerRoomPage(LiveLiveOwnerRoomPageReq req);
 
     List<LiveLiveOwnerRoomReportPageResp> selectOwnerRoomReportPage(LiveLiveOwnerRoomReportPageReq req);
+    List<LiveLiveRoomReportExportResp> selectRoomReportExport(LiveLiveRoomReportExportReq req);
+
 }

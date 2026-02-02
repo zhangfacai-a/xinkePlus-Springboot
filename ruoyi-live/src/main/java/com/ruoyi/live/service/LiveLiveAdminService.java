@@ -20,4 +20,6 @@ public interface LiveLiveAdminService {
     List<LiveLiveOwnerRoomPageResp> ownerRoomPage(LiveLiveOwnerRoomPageReq req);
 
     List<LiveLiveOwnerRoomReportPageResp> ownerRoomReportPage(LiveLiveOwnerRoomReportPageReq req);
+    List<LiveLiveRoomReportExportResp> exportRoomReports(LiveLiveRoomReportExportReq req);
+
 }

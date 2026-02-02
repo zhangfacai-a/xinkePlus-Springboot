@@ -54,4 +54,9 @@ public class LiveLiveAdminServiceImpl implements LiveLiveAdminService {
     public List<LiveLiveOwnerRoomReportPageResp> ownerRoomReportPage(LiveLiveOwnerRoomReportPageReq req) {
         return adminMapper.selectOwnerRoomReportPage(req);
     }
+    @Override
+    public List<LiveLiveRoomReportExportResp> exportRoomReports(LiveLiveRoomReportExportReq req) {
+        return adminMapper.selectRoomReportExport(req);
+    }
+
 }

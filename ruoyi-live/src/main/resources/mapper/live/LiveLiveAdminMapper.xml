@@ -2,13 +2,14 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
 <mapper namespace="com.ruoyi.live.mapper.LiveLiveAdminMapper">
 
     <!--
       说明：
-      1) 旧逻辑：latestSnapshotInRange + sum(累计字段)  :contentReference[oaicite:1]{index=1}
-      2) 新逻辑：直接从 v_live_live_owner_report_delta 汇总 delta 字段
-      3) 时间筛选：必须作用于 v.report_time（delta 属于 report_time 的区间结束点）
+      1) 新逻辑：列表/导出/明细统一基于 v_live_live_owner_report_delta（delta 视图）
+      2) 时间筛选：必须作用于 v.report_time
+      3) XML 里不要出现 && / ||（避免 & 导致 XML 解析失败），统一用 and/or
     -->
 
     <!-- report_time 时间范围筛选（用于 delta 视图） -->
@@ -53,7 +54,7 @@
         left join live_live_session s on s.room_id = rm.id
         left join v_live_live_owner_report_delta v on v.session_id = s.id
         left join live_live_owner o on o.id = v.owner_id
-        where 1=1
+        where 1 = 1
         <include refid="deltaReportTimeRange"/>
 
         <if test="roomName != null and roomName != ''">
@@ -97,7 +98,7 @@
 
         from live_live_session s
         left join v_live_live_owner_report_delta v on v.session_id = s.id
-        where 1=1
+        where 1 = 1
         and s.room_id = #{roomId}
         <include refid="deltaReportTimeRange"/>
 
@@ -108,7 +109,11 @@
     <!-- ============ 直播间维度：某场次的上报明细（分页，展示“区间增量”） ============ -->
     <select id="selectSessionReportPage" resultType="com.ruoyi.live.vo.LiveLiveSessionReportPageResp">
         select
-        v.id as reportId,
+        (
+        UNIX_TIMESTAMP(v.report_time) * 1000000
+        + MICROSECOND(v.report_time)
+        ) as reportId,
+
         o.owner_name as ownerName,
 
         v.report_time as reportTime,
@@ -124,8 +129,6 @@
         v.deal_user_cnt_delta as dealUserCnt,
         v.qianchuan_cost_delta as qianchuanCost,
 
-        /* 明细页两个上报比率如果你仍然想看“上报值”，可以从原表查；
-        这里按你的需求，优先展示 delta 口径的两个比率 */
         case
         when ifnull(v.viewer_cnt_delta,0) = 0 then 0
         else round(v.deal_user_cnt_delta / v.viewer_cnt_delta, 6)
@@ -136,13 +139,11 @@
         else round(v.viewer_cnt_delta / v.exposure_cnt_delta, 6)
         end as exposureWatchRate,
 
-        /* 这个字段原本是“观看-关注率(上报值)”，delta 口径下没有严格定义；
-        为了不改 VO，这里返回 NULL（前端可不展示/或你后续定义再补） */
         null as watchFollowRate
 
         from v_live_live_owner_report_delta v
         join live_live_owner o on o.id = v.owner_id
-        where 1=1
+        where 1 = 1
         and v.session_id = #{sessionId}
 
         <if test="ownerName != null and ownerName != ''">
@@ -190,7 +191,7 @@
         left join v_live_live_owner_report_delta v on v.owner_id = o.id
         left join live_live_session s on s.id = v.session_id
         left join live_live_room rm on rm.id = s.room_id
-        where 1=1
+        where 1 = 1
         <include refid="deltaReportTimeRange"/>
 
         <if test="ownerName != null and ownerName != ''">
@@ -231,7 +232,7 @@
         from live_live_room rm
         join live_live_session s on s.room_id = rm.id
         join v_live_live_owner_report_delta v on v.session_id = s.id
-        where 1=1
+        where 1 = 1
         and v.owner_id = #{ownerId}
         <include refid="deltaReportTimeRange"/>
 
@@ -263,7 +264,6 @@
         v.deal_user_cnt_delta as dealUserCnt,
         v.qianchuan_cost_delta as qianchuanCost,
 
-        /* 明细页按 delta 算的两个比率 */
         case
         when ifnull(v.viewer_cnt_delta,0) = 0 then 0
         else round(v.deal_user_cnt_delta / v.viewer_cnt_delta, 6)
@@ -278,7 +278,7 @@
 
         from v_live_live_owner_report_delta v
         join live_live_session s on s.id = v.session_id
-        where 1=1
+        where 1 = 1
         and v.owner_id = #{ownerId}
         and s.room_id = #{roomId}
 
@@ -290,6 +290,107 @@
         </if>
 
         order by v.report_time desc
+    </select>
+
+    <!-- ============ 直播间维度：明细导出（累计 + 本段Δ + 率） ============ -->
+    <select id="selectRoomReportExport" resultType="com.ruoyi.live.vo.LiveLiveRoomReportExportResp">
+        SELECT
+        /* ===== 维度信息 ===== */
+        rm.room_name               AS roomName,
+        s.platform_session_room_id AS platformSessionRoomId,
+        o.owner_name               AS ownerName,
+
+        v.session_id               AS sessionId,
+        v.owner_id                 AS ownerId,
+
+        /* ===== 时间 ===== */
+        v.report_time              AS reportTime,
+        v.prev_report_time         AS prevReportTime,
+        v.diff_minutes             AS diffMinutes,
+
+        /* ===== 累计（上报值） ===== */
+        v.exposure_cnt             AS exposureCnt,
+        v.viewer_cnt               AS viewerCnt,
+        v.new_fans_cnt             AS newFansCnt,
+        v.deal_user_cnt            AS dealUserCnt,
+        v.deal_item_cnt            AS dealItemCnt,
+        v.gmv_amount               AS gmvAmount,
+        v.refund_amount            AS refundAmount,
+        v.qianchuan_cost           AS qianchuanCost,
+
+        /* ===== 本段 Δ ===== */
+        v.exposure_cnt_delta       AS exposureCntDelta,
+        v.viewer_cnt_delta         AS viewerCntDelta,
+        v.new_fans_cnt_delta       AS newFansCntDelta,
+        v.deal_user_cnt_delta      AS dealUserCntDelta,
+        v.deal_item_cnt_delta      AS dealItemCntDelta,
+        v.gmv_amount_delta         AS gmvAmountDelta,
+        v.refund_amount_delta      AS refundAmountDelta,
+        v.qianchuan_cost_delta     AS qianchuanCostDelta,
+
+        /* ===== 上报比率（累计上报值，来自视图/或原表拼进视图） ===== */
+        v.exposure_watch_rate      AS exposureWatchRate,
+        v.watch_follow_rate        AS watchFollowRate,
+
+        /* ===== 本段 Δ 比率（用 Δ 的分子分母算） ===== */
+        CASE
+        WHEN IFNULL(v.exposure_cnt_delta, 0) = 0 THEN 0
+        ELSE ROUND(v.viewer_cnt_delta / v.exposure_cnt_delta, 6)
+        END                        AS exposureWatchRateDelta,
+
+        CASE
+        WHEN IFNULL(v.viewer_cnt_delta, 0) = 0 THEN 0
+        ELSE ROUND(v.new_fans_cnt_delta / v.viewer_cnt_delta, 6)
+        END                        AS watchFollowRateDelta,
+
+
+        CASE
+        WHEN IFNULL(v.viewer_cnt, 0) = 0 THEN 0
+        ELSE ROUND(v.deal_user_cnt / v.viewer_cnt, 6)
+        END                        AS conversionRate,
+
+        CASE
+        WHEN IFNULL(v.exposure_cnt, 0) = 0 THEN 0
+        ELSE ROUND(v.viewer_cnt / v.exposure_cnt, 6)
+        END                        AS exposureClickRate,
+
+        CASE
+        WHEN IFNULL(v.viewer_cnt_delta, 0) = 0 THEN 0
+        ELSE ROUND(v.deal_user_cnt_delta / v.viewer_cnt_delta, 6)
+        END                        AS conversionRateDelta,
+
+        CASE
+        WHEN IFNULL(v.exposure_cnt_delta, 0) = 0 THEN 0
+        ELSE ROUND(v.viewer_cnt_delta / v.exposure_cnt_delta, 6)
+        END                        AS exposureClickRateDelta
+
+        FROM v_live_live_owner_report_delta v
+        JOIN live_live_session s ON s.id = v.session_id
+        JOIN live_live_room rm   ON rm.id = s.room_id
+        LEFT JOIN live_live_owner o ON o.id = v.owner_id
+        WHERE 1 = 1
+
+        <!-- ===== 时间筛选（按上报时间） ===== -->
+        <if test="beginTime != null and beginTime != ''">
+            AND v.report_time <![CDATA[>=]]> #{beginTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND v.report_time <![CDATA[<=]]> #{endTime}
+        </if>
+
+        <!-- ===== 维度筛选 ===== -->
+        <if test="roomName != null and roomName != ''">
+            AND rm.room_name LIKE CONCAT('%', #{roomName}, '%')
+        </if>
+        <if test="ownerName != null and ownerName != ''">
+            AND o.owner_name LIKE CONCAT('%', #{ownerName}, '%')
+        </if>
+
+        ORDER BY
+        rm.id ASC,
+        v.session_id ASC,
+        v.owner_id ASC,
+        v.report_time DESC
     </select>
 
 </mapper>
