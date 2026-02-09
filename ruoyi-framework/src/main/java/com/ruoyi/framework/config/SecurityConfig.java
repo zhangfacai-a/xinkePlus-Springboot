@@ -107,7 +107,7 @@ public class SecurityConfig
                         .requestMatchers("/api/live/comment/report").permitAll()
                         .requestMatchers("/live/roomUser/report").permitAll()
                         .requestMatchers("/api/live/metrics/report").permitAll()
-
+                        .requestMatchers("/live/userRoom/report").permitAll()
                         // 除上面外的所有请求全部需要鉴权认证
                     .anyRequest().authenticated();
             })

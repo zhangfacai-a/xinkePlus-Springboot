@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ruoyi.live.mapper.UserRoomRoomMapper">
+
+    <select id="selectRoomList" resultType="com.ruoyi.live.vo.UserRoomRoomVO">
+        SELECT
+        id,
+        room_key AS roomKey,
+        room_name AS roomName,
+        last_seen_time AS lastSeenTime
+        FROM user_room_room
+        WHERE 1=1
+        <if test="q != null and q.roomKey != null and q.roomKey != ''">
+            AND room_key LIKE CONCAT('%', #{q.roomKey}, '%')
+        </if>
+        <if test="q != null and q.roomName != null and q.roomName != ''">
+            AND room_name LIKE CONCAT('%', #{q.roomName}, '%')
+        </if>
+        ORDER BY last_seen_time DESC, id DESC
+    </select>
+
+    <update id="updateRoomNameById">
+        UPDATE user_room_room
+        SET room_name = #{roomName}
+        WHERE id = #{roomId}
+    </update>
+
+</mapper>

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ruoyi.live.mapper.UserRoomReportMapper">
+
+    <!-- room -->
+    <select id="selectRoomIdByRoomKey" resultType="java.lang.Long">
+        SELECT id FROM user_room_room WHERE room_key = #{roomKey} LIMIT 1
+    </select>
+
+    <update id="updateRoomLastSeenTime">
+        UPDATE user_room_room SET last_seen_time = #{lastSeenTime} WHERE id = #{roomId}
+    </update>
+
+    <!-- user -->
+    <insert id="upsertUser" parameterType="com.ruoyi.live.domain.UserRoomUser">
+        INSERT INTO user_room_user
+            (sec_uid, nickname, last_seen_time, create_time, update_time)
+        VALUES
+            (#{secUid}, #{nickname}, #{lastSeenTime}, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                                 nickname = VALUES(nickname),
+                                 last_seen_time = VALUES(last_seen_time),
+                                 update_time = NOW()
+    </insert>
+
+    <select id="selectUserBySecUid" resultType="com.ruoyi.live.domain.UserRoomUser">
+        SELECT id, sec_uid AS secUid, nickname,
+               last_seen_time AS lastSeenTime,
+               create_time AS createTime, update_time AS updateTime
+        FROM user_room_user
+        WHERE sec_uid = #{secUid}
+            LIMIT 1
+    </select>
+
+    <!-- daily -->
+    <select id="selectDailyWatchTimeCum" resultType="java.lang.Integer">
+        SELECT watch_time_cum
+        FROM user_room_rank_daily
+        WHERE room_id = #{roomId}
+          AND user_id = #{userId}
+          AND stat_date = #{statDate}
+            LIMIT 1
+    </select>
+
+    <insert id="upsertDaily" parameterType="com.ruoyi.live.domain.UserRoomRankDaily">
+        INSERT INTO user_room_rank_daily
+        (room_id, user_id, stat_date, watch_time_cum, captured_time, create_time)
+        VALUES
+            (#{roomId}, #{userId}, #{statDate}, #{watchTimeCum}, #{capturedTime}, NOW())
+            ON DUPLICATE KEY UPDATE
+                                 watch_time_cum = VALUES(watch_time_cum),
+                                 captured_time = VALUES(captured_time)
+    </insert>
+
+    <!-- relation capture -->
+    <insert id="upsertRelationCapture" parameterType="com.ruoyi.live.domain.UserRoomRelation">
+        INSERT INTO user_room_relation
+        (room_id, user_id, is_follower, is_following, last_watch_time_delta, capture_update_time, create_time, update_time)
+        VALUES
+            (#{roomId}, #{userId}, #{isFollower}, #{isFollowing}, #{lastWatchTimeDelta}, #{captureUpdateTime}, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                                 is_follower = VALUES(is_follower),
+                                 is_following = VALUES(is_following),
+                                 last_watch_time_delta = VALUES(last_watch_time_delta),
+                                 capture_update_time = VALUES(capture_update_time),
+                                 update_time = NOW()
+    </insert>
+
+    <!-- visit -->
+    <insert id="upsertVisit" parameterType="com.ruoyi.live.domain.UserRoomVisitDaily">
+        INSERT INTO user_room_visit_daily
+            (room_id, user_id, visit_date, last_visit_time, create_time)
+        VALUES
+            (#{roomId}, #{userId}, #{visitDate}, #{lastVisitTime}, NOW())
+            ON DUPLICATE KEY UPDATE
+                                 last_visit_time = GREATEST(
+                                 IFNULL(last_visit_time, '1970-01-01 00:00:00'),
+                                 VALUES(last_visit_time)
+                                 )
+    </insert>
+    <insert id="upsertRoomByKey">
+        INSERT INTO user_room_room (room_key, last_seen_time, create_time, update_time)
+        VALUES (#{roomKey}, #{lastSeenTime}, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+                                 last_seen_time = VALUES(last_seen_time),
+                                 update_time = NOW()
+    </insert>
+
+</mapper>

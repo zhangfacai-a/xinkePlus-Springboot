@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ruoyi.live.mapper.UserRoomStatMapper">
+
+    <!-- 根据 roomKey 查 roomId（可选） -->
+    <select id="selectRoomIdByRoomKey" resultType="java.lang.Long">
+        SELECT id
+        FROM user_room_room
+        WHERE room_key = #{roomKey}
+            LIMIT 1
+    </select>
+
+    <!--
+        汇总统计：按负责人
+        用于：
+        - 柱状图 / 条形图
+        - 表格统计
+
+        统计口径：
+        - followUserCount   : follow_status != 0 的去重用户数
+        - orderUserCount    : follow_status = 2 的去重用户数
+        - followActionCount : follow_status != 0 的历史记录条数
+    -->
+    <select id="statSummaryByOwner"
+            resultType="com.ruoyi.live.vo.UserRoomOwnerStatRow">
+
+        SELECT
+        CASE
+        WHEN (#{includeUnassigned} = 1)
+        THEN COALESCE(NULLIF(TRIM(owner_name), ''), '未分配')
+        ELSE owner_name
+        END AS ownerName,
+
+        COUNT(
+        DISTINCT
+        IF(
+        follow_status != 0,
+        CONCAT(room_id, '_', user_id),
+        NULL
+        )
+        ) AS followUserCount,
+
+        COUNT(
+        DISTINCT
+        IF(
+        follow_status = 2,
+        CONCAT(room_id, '_', user_id),
+        NULL
+        )
+        ) AS orderUserCount,
+
+        SUM(
+        CASE
+        WHEN follow_status != 0 THEN 1
+        ELSE 0
+        END
+        ) AS followActionCount
+
+        FROM user_room_follow_history
+        WHERE 1 = 1
+
+        <if test="roomId != null">
+            AND room_id = #{roomId}
+        </if>
+
+        <if test="beginTime != null and beginTime != ''">
+            AND follow_time <![CDATA[>=]]> #{beginTime}
+        </if>
+
+        <if test="endTime != null and endTime != ''">
+            AND follow_time <![CDATA[<=]]> #{endTime}
+        </if>
+
+        <if test="includeUnassigned == false">
+            <![CDATA[
+              AND owner_name IS NOT NULL
+              AND TRIM(owner_name) <> ''
+            ]]>
+        </if>
+
+        GROUP BY ownerName
+        ORDER BY followUserCount DESC, orderUserCount DESC
+
+    </select>
+
+    <!--
+        趋势统计：按月（不拆负责人）
+        用于：
+        - 总趋势折线图（ECharts）
+
+        month 格式：yyyy-MM
+    -->
+    <select id="statMonthly"
+            resultType="com.ruoyi.live.vo.UserRoomMonthlyStatRow">
+
+        SELECT
+        DATE_FORMAT(follow_time, '%Y-%m') AS month,
+
+        COUNT(
+        DISTINCT
+        IF(
+        follow_status != 0,
+        CONCAT(room_id, '_', user_id),
+        NULL
+        )
+        ) AS followUserCount,
+
+        COUNT(
+        DISTINCT
+        IF(
+        follow_status = 2,
+        CONCAT(room_id, '_', user_id),
+        NULL
+        )
+        ) AS orderUserCount,
+
+        SUM(
+        CASE
+        WHEN follow_status != 0 THEN 1
+        ELSE 0
+        END
+        ) AS followActionCount
+
+        FROM user_room_follow_history
+        WHERE 1 = 1
+
+        <if test="roomId != null">
+            AND room_id = #{roomId}
+        </if>
+
+        <if test="beginTime != null and beginTime != ''">
+            AND follow_time <![CDATA[>=]]> #{beginTime}
+        </if>
+
+        <if test="endTime != null and endTime != ''">
+            AND follow_time <![CDATA[<=]]> #{endTime}
+        </if>
+
+        <if test="includeUnassigned == false">
+            <![CDATA[
+              AND owner_name IS NOT NULL
+              AND TRIM(owner_name) <> ''
+            ]]>
+        </if>
+
+        GROUP BY month
+        ORDER BY month ASC
+
+    </select>
+
+</mapper>

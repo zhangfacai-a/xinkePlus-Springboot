@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ruoyi.live.mapper.UserRoomManageMapper">
+
+    <select id="selectRoomIdByRoomKey" resultType="java.lang.Long">
+        SELECT id FROM user_room_room WHERE room_key = #{roomKey} LIMIT 1
+    </select>
+
+    <!-- 列表：user + relation + visit 聚合 + ownerAssignTime -->
+    <select id="selectAudienceList" resultType="com.ruoyi.live.vo.UserRoomAudienceVO">
+        SELECT
+        r.room_id               AS roomId,
+        r.user_id               AS userId,
+
+        u.sec_uid               AS secUid,
+        u.nickname              AS nickname,
+        u.last_seen_time        AS userLastSeenTime,
+
+        r.is_follower           AS isFollower,
+        r.is_following          AS isFollowing,
+
+        rd.watch_time_cum       AS watchTimeTodayCum,
+
+        r.last_watch_time_delta AS lastWatchTimeDelta,
+        r.capture_update_time   AS captureUpdateTime,
+
+        r.owner_name            AS ownerName,
+        r.follow_status         AS followStatus,
+        r.order_no              AS orderNo,
+        r.remark                AS remark,
+        r.intention_level       AS intentionLevel,
+        r.manage_update_time    AS manageUpdateTime,
+
+        v.visit_count           AS visitCount,
+        v.last_visit_time       AS lastVisitTime,
+
+        COALESCE(oh.owner_assign_time, r.owner_assign_time) AS ownerAssignTime
+
+        FROM user_room_relation r
+        JOIN user_room_user u ON u.id = r.user_id
+
+        LEFT JOIN (
+        SELECT room_id, user_id,
+        COUNT(*) AS visit_count,
+        MAX(last_visit_time) AS last_visit_time
+        FROM user_room_visit_daily
+        GROUP BY room_id, user_id
+        ) v ON v.room_id = r.room_id AND v.user_id = r.user_id
+
+        LEFT JOIN (
+        SELECT room_id, user_id, MAX(assign_time) AS owner_assign_time
+        FROM user_room_owner_history
+        GROUP BY room_id, user_id
+        ) oh ON oh.room_id = r.room_id AND oh.user_id = r.user_id
+
+        LEFT JOIN user_room_rank_daily rd
+        ON rd.room_id = r.room_id
+        AND rd.user_id = r.user_id
+        AND rd.stat_date = CURDATE()
+
+        WHERE r.room_id = #{roomId}
+
+        <if test="q != null and q.secUid != null and q.secUid != ''">
+            AND u.sec_uid LIKE CONCAT('%', #{q.secUid}, '%')
+        </if>
+
+        <if test="q != null and q.nickname != null and q.nickname != ''">
+            AND u.nickname LIKE CONCAT('%', #{q.nickname}, '%')
+        </if>
+
+        <if test="q != null and q.followStatus != null">
+            AND r.follow_status = #{q.followStatus}
+        </if>
+
+        <if test="q != null and q.intentionLevel != null">
+            AND r.intention_level = #{q.intentionLevel}
+        </if>
+
+        <if test="q != null and q.isFollower != null">
+            AND r.is_follower = #{q.isFollower}
+        </if>
+
+        <if test="q != null and q.isFollowing != null">
+            AND r.is_following = #{q.isFollowing}
+        </if>
+
+        <if test="q != null and q.captureTimeBegin != null and q.captureTimeBegin != ''">
+            AND r.capture_update_time <![CDATA[>=]]> #{q.captureTimeBegin}
+        </if>
+        <if test="q != null and q.captureTimeEnd != null and q.captureTimeEnd != ''">
+            AND r.capture_update_time <![CDATA[<=]]> #{q.captureTimeEnd}
+        </if>
+
+        <if test="q != null and q.manageTimeBegin != null and q.manageTimeBegin != ''">
+            AND r.manage_update_time <![CDATA[>=]]> #{q.manageTimeBegin}
+        </if>
+        <if test="q != null and q.manageTimeEnd != null and q.manageTimeEnd != ''">
+            AND r.manage_update_time <![CDATA[<=]]> #{q.manageTimeEnd}
+        </if>
+
+        <if test="q != null and q.ownerName != null and q.ownerName != ''">
+            AND (
+            r.owner_name LIKE CONCAT('%', #{q.ownerName}, '%')
+            OR EXISTS (
+            SELECT 1 FROM user_room_owner_history h
+            WHERE h.room_id = r.room_id
+            AND h.user_id = r.user_id
+            AND h.owner_name LIKE CONCAT('%', #{q.ownerName}, '%')
+            )
+            )
+        </if>
+
+        ORDER BY
+        r.capture_update_time DESC,
+        CASE WHEN r.intention_level IS NULL THEN 9 ELSE r.intention_level END ASC
+    </select>
+
+    <!-- 详情基础（复用同一套字段输出） -->
+    <select id="selectAudienceBase" resultType="com.ruoyi.live.vo.UserRoomAudienceVO">
+        SELECT
+            r.room_id               AS roomId,
+            r.user_id               AS userId,
+
+            u.sec_uid               AS secUid,
+            u.nickname              AS nickname,
+            u.last_seen_time        AS userLastSeenTime,
+
+            r.is_follower           AS isFollower,
+            r.is_following          AS isFollowing,
+
+            rd.watch_time_cum       AS watchTimeTodayCum,
+
+            r.last_watch_time_delta AS lastWatchTimeDelta,
+            r.capture_update_time   AS captureUpdateTime,
+
+            r.owner_name            AS ownerName,
+            r.follow_status         AS followStatus,
+            r.order_no              AS orderNo,
+            r.remark                AS remark,
+            r.intention_level       AS intentionLevel,
+            r.manage_update_time    AS manageUpdateTime,
+
+            v.visit_count           AS visitCount,
+            v.last_visit_time       AS lastVisitTime,
+
+            COALESCE(oh.owner_assign_time, r.owner_assign_time) AS ownerAssignTime
+
+        FROM user_room_relation r
+                 JOIN user_room_user u ON u.id = r.user_id
+
+                 LEFT JOIN (
+            SELECT room_id, user_id,
+                   COUNT(*) AS visit_count,
+                   MAX(last_visit_time) AS last_visit_time
+            FROM user_room_visit_daily
+            GROUP BY room_id, user_id
+        ) v ON v.room_id = r.room_id AND v.user_id = r.user_id
+
+                 LEFT JOIN (
+            SELECT room_id, user_id, MAX(assign_time) AS owner_assign_time
+            FROM user_room_owner_history
+            GROUP BY room_id, user_id
+        ) oh ON oh.room_id = r.room_id AND oh.user_id = r.user_id
+
+                 LEFT JOIN user_room_rank_daily rd
+                           ON rd.room_id = r.room_id
+                               AND rd.user_id = r.user_id
+                               AND rd.stat_date = CURDATE()
+
+        WHERE r.room_id = #{roomId}
+          AND r.user_id = #{userId}
+            LIMIT 1
+    </select>
+
+    <select id="selectFollowHistory" resultType="com.ruoyi.live.vo.UserRoomFollowHistoryVO">
+        SELECT owner_name AS ownerName,
+               follow_status AS followStatus,
+               order_no AS orderNo,
+               remark AS remark,
+               intention_level AS intentionLevel,
+               follow_time AS followTime
+        FROM user_room_follow_history
+        WHERE room_id = #{roomId} AND user_id = #{userId}
+        ORDER BY follow_time DESC
+    </select>
+
+    <select id="selectOwnerHistory" resultType="com.ruoyi.live.vo.UserRoomOwnerHistoryVO">
+        SELECT owner_name AS ownerName,
+               assign_time AS assignTime
+        FROM user_room_owner_history
+        WHERE room_id = #{roomId} AND user_id = #{userId}
+        ORDER BY assign_time DESC
+    </select>
+
+    <!-- 锁行读 relation（用于 24h 校验） -->
+    <select id="selectRelationForUpdate" resultType="com.ruoyi.live.vo.UserRoomRelationLockRow">
+        SELECT
+            room_id AS roomId,
+            user_id AS userId,
+            owner_name AS ownerName,
+            owner_assign_time AS ownerAssignTime
+        FROM user_room_relation
+        WHERE room_id = #{roomId} AND user_id = #{userId}
+            FOR UPDATE
+    </select>
+
+    <!-- 更新人工字段：ownerChanged 为 true 时更新 owner_assign_time -->
+    <update id="updateBizFields">
+        UPDATE user_room_relation
+        SET
+        owner_name = #{req.ownerName},
+        <if test="ownerChanged">
+            owner_assign_time = #{ownerAssignTime},
+        </if>
+        follow_status = #{req.followStatus},
+        order_no = #{req.orderNo},
+        remark = #{req.remark},
+        intention_level = #{req.intentionLevel},
+        manage_update_time = #{manageUpdateTime},
+        update_time = NOW()
+        WHERE room_id = #{req.roomId} AND user_id = #{req.userId}
+    </update>
+
+    <insert id="insertFollowHistory">
+        INSERT INTO user_room_follow_history
+        (room_id, user_id, owner_name, follow_status, order_no, remark, intention_level, follow_time, create_time)
+        VALUES
+            (#{roomId}, #{userId}, #{ownerName}, #{followStatus}, #{orderNo}, #{remark}, #{intentionLevel}, #{followTime}, NOW())
+    </insert>
+
+    <insert id="insertOwnerHistory">
+        INSERT INTO user_room_owner_history
+            (room_id, user_id, owner_name, assign_time, create_time)
+        VALUES
+            (#{roomId}, #{userId}, #{ownerName}, #{assignTime}, NOW())
+    </insert>
+
+</mapper>
